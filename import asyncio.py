@@ -1,9 +1,13 @@
 import asyncio
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
-TOKEN = "8782805695:AAF-qNyPHITu_alANib2mTtDtti4W2VyZ5o"
+load_dotenv()
+
+TOKEN=os.getenv("toren")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
