@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN=os.getenv("toren")
+TOKEN=os.getenv("token")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
