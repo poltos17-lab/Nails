@@ -1,5 +1,6 @@
 import asyncio
 import os
+import python-dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime, timedelta
