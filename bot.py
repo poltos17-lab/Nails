@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 TOKEN = os.getenv("TOKEN")
 
-ADMIN_ID = 123456789
+ADMIN_ID = 6416994625
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
