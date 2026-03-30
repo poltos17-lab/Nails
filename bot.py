@@ -3,11 +3,6 @@ import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TOKEN=os.getenv("token")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
