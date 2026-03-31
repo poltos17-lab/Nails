@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 TOKEN = os.getenv("TOKEN")
 
-ADMIN_ID = 6416994625
+ADMIN_IDS = [6416994625]
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -157,7 +157,7 @@ async def handler(message: types.Message):
         await message.answer("Привет 💅", reply_markup=main_kb)
 
     # ===== АДМИН =====
-    elif message.text == "/admin" and user_id == ADMIN_ID:
+    elif message.text == "/admin" and user_id in ADMIN_IDS:
         cursor.execute("SELECT name, phone, procedure, date, time FROM appointments")
         rows = cursor.fetchall()
 
