@@ -7,7 +7,7 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 
-TOKEN = "ТВОЙ_ТОКЕН"
+TOKEN = os.getenv("TOKEN")
 ADMIN_IDS = [6416994625]
 
 bot = Bot(token=TOKEN)
