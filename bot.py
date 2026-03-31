@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+import os
 from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher, F
