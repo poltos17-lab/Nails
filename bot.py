@@ -85,7 +85,7 @@ def get_time_keyboard(date):
     now = datetime.now()
 
     for hour in range(10, 19):
-        if hour == 14:
+        if hour == 21:
             continue
 
         time_str = f"{hour}:00"
