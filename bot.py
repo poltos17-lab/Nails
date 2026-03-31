@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 TOKEN = os.getenv("TOKEN")
 
-ADMIN_IDS = [6416994625]
+ADMIN_IDS = [6416994625, 532148285]
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -62,7 +62,7 @@ back_kb = ReplyKeyboardMarkup(
 
 procedure_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Маникюр"), KeyboardButton(text="Брови")],
+        [KeyboardButton(text="Ресницы"), KeyboardButton(text="Брови")],
         [KeyboardButton(text="Назад")]
     ],
     resize_keyboard=True
