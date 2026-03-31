@@ -49,6 +49,7 @@ def load_data():
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Записаться")],
+        [KeyboardButton(text="Заказать звонок")],
         [KeyboardButton(text="Моя запись"), KeyboardButton(text="Отменить запись")]
     ],
     resize_keyboard=True
@@ -112,7 +113,7 @@ def get_time_keyboard(date):
     kb.append([KeyboardButton(text="Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-# ====== НАПОМИНАНИЯ (ЗА ДЕНЬ) ======
+# ====== НАПОМИНАНИЯ ======
 async def reminder_loop():
     while True:
         now = datetime.now()
@@ -171,6 +172,28 @@ async def handler(message: types.Message):
 
         await message.answer(text)
 
+    # ===== ЗАКАЗ ЗВОНКА =====
+    elif message.text == "Заказать звонок":
+        user_data[user_id] = {"callback": True}
+        await message.answer("Как тебя зовут?", reply_markup=back_kb)
+
+    elif user_id in user_data and user_data[user_id].get("callback") and "name" not in user_data[user_id]:
+        user_data[user_id]["name"] = message.text
+        await message.answer("Введи номер телефона 📱", reply_markup=back_kb)
+
+    elif user_id in user_data and user_data[user_id].get("callback") and "phone" not in user_data[user_id]:
+        name = user_data[user_id]["name"]
+        phone = message.text
+
+        for admin in ADMIN_IDS:
+            await bot.send_message(
+                admin,
+                f"📞 Заявка на звонок!\n\nИмя: {name}\nТелефон: {phone}"
+            )
+
+        await message.answer("Спасибо! Мы скоро с тобой свяжемся 💛", reply_markup=main_kb)
+        del user_data[user_id]
+
     # ===== ЗАПИСЬ =====
     elif message.text == "Записаться":
 
@@ -181,9 +204,18 @@ async def handler(message: types.Message):
         user_data[user_id] = {}
         await message.answer("Выбери процедуру ✨", reply_markup=procedure_kb)
 
-    # ===== НАЗАД (ПОШАГОВО) =====
+    # ===== НАЗАД =====
     elif message.text == "Назад" and user_id in user_data:
         step = user_data[user_id]
+
+        if step.get("callback"):
+            if "phone" in step:
+                del step["phone"]
+                await message.answer("Как тебя зовут?", reply_markup=back_kb)
+            elif "name" in step:
+                del user_data[user_id]
+                await message.answer("Главное меню", reply_markup=main_kb)
+            return
 
         if "time" in step:
             del step["time"]
@@ -249,6 +281,13 @@ async def handler(message: types.Message):
             (user_id, name, phone, procedure, date, time)
         )
         conn.commit()
+
+        # 🔔 УВЕДОМЛЕНИЕ АДМИНАМ
+        for admin in ADMIN_IDS:
+            await bot.send_message(
+                admin,
+                f"🆕 Новая запись!\n\nИмя: {name}\nТелефон: {phone}\nПроцедура: {procedure}\nДата: {date}\nВремя: {time}"
+            )
 
         await message.answer(
             f"Готово 💅\n{name}, ты записана на {procedure}\n📅 {date} в {time}",
