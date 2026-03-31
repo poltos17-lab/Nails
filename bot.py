@@ -282,7 +282,7 @@ async def handler(message: types.Message):
         )
         conn.commit()
 
-        # 🔔 УВЕДОМЛЕНИЕ АДМИНАМ
+        # 🔔 УВЕДОМЛЕНИЕ АДМИНАМ (НОВАЯ ЗАПИСЬ)
         for admin in ADMIN_IDS:
             await bot.send_message(
                 admin,
@@ -319,6 +319,13 @@ async def handler(message: types.Message):
 
             cursor.execute("DELETE FROM appointments WHERE user_id = ?", (user_id,))
             conn.commit()
+
+            # 🔔 УВЕДОМЛЕНИЕ АДМИНАМ (ОТМЕНА)
+            for admin in ADMIN_IDS:
+                await bot.send_message(
+                    admin,
+                    f"❌ Отмена записи!\n\nИмя: {name}\nТелефон: {phone}\nПроцедура: {procedure}\nДата: {date}\nВремя: {time}"
+                )
 
             await message.answer("❌ Запись отменена", reply_markup=main_kb)
         else:
