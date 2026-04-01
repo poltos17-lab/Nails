@@ -8,6 +8,44 @@ from datetime import datetime, timedelta
 TOKEN = os.getenv("TOKEN")
 ADMIN_IDS = [6416994625]
 
+# ===== КОМАНДЫ (ФИКС) =====
+
+@dp.message(lambda message: message.text == "/start")
+async def start_cmd(message: types.Message):
+    await message.answer("Привет 💅", reply_markup=main_kb)
+
+
+@dp.message(lambda message: message.text == "/week")
+async def week_cmd(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    user_data[message.from_user.id] = {"admin_week": True}
+    await message.answer("Выбери день", reply_markup=get_week_keyboard())
+
+
+@dp.message(lambda message: message.text == "/graph")
+async def graph_cmd(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    cursor.execute("SELECT date, time FROM work_schedule ORDER BY date, time")
+    rows = cursor.fetchall()
+
+    if not rows:
+        await message.answer("График пуст")
+        return
+
+    result = {}
+    for d, t in rows:
+        result.setdefault(d, []).append(t)
+
+    text = "📅 График:\n\n"
+    for d in result:
+        text += f"{d}: {', '.join(result[d])}\n"
+
+    await message.answer(text)
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
@@ -206,17 +244,7 @@ async def handler(message: types.Message):
     user_id = message.from_user.id
     text = message.text
 
-    if text == "/start":
-        await message.answer("Привет 💅", reply_markup=main_kb)
-
     # ===== ГРАФИК =====
-    elif text == "/week" and user_id in ADMIN_IDS:
-        user_data[user_id] = {"admin_week": True}
-        await message.answer("Выбери день", reply_markup=get_week_keyboard())
-
-    elif text == "/graph" and user_id in ADMIN_IDS:
-        cursor.execute("SELECT date, time FROM work_schedule ORDER BY date, time")
-        rows = cursor.fetchall()
 
         if not rows:
             await message.answer("График пуст")
