@@ -6,7 +6,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from datetime import datetime, timedelta
 
 TOKEN = os.getenv("TOKEN")
-ADMIN_IDS = [6416994625]
+ADMIN_IDS = [6416994625, 532148285]
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -78,7 +78,7 @@ def back_kb():
 def procedure_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Маникюр 💅"), KeyboardButton(text="Брови 👁")],
+            [KeyboardButton(text="Ресницы "), KeyboardButton(text="Брови 👁")],
             [KeyboardButton(text="Назад")],
             [KeyboardButton(text="Главное меню")]
         ],
