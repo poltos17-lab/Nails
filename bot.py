@@ -52,64 +52,6 @@ def load_data():
 
         appointments[date].append(time)
 
-# ====== КОМАНДЫ (ФИКС) ======
-@dp.message(lambda m: m.text == "/start")
-async def cmd_start(message: types.Message):
-    user_data.pop(message.from_user.id, None)
-    await message.answer("Привет 💅", reply_markup=main_kb)
-    return
-
-@dp.message(lambda m: m.text == "/week")
-async def cmd_week(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        return
-
-    user_data[message.from_user.id] = {"admin_week": True}
-    await message.answer("Выбери день", reply_markup=get_week_keyboard())
-    return
-
-@dp.message(lambda m: m.text == "/graph")
-async def cmd_graph(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        return
-
-    cursor.execute("SELECT date, time FROM work_schedule ORDER BY date, time")
-    rows = cursor.fetchall()
-
-    if not rows:
-        await message.answer("График пуст")
-        return
-
-    result = {}
-    for d, t in rows:
-        result.setdefault(d, []).append(t)
-
-    text = "📅 График:\n\n"
-    for d in result:
-        text += f"{d}: {', '.join(result[d])}\n"
-
-    await message.answer(text)
-    return
-
-@dp.message(lambda m: m.text == "/admin")
-async def cmd_admin(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        return
-
-    cursor.execute("SELECT name, phone, procedure, date, time FROM appointments")
-    rows = cursor.fetchall()
-
-    if not rows:
-        await message.answer("Нет записей")
-        return
-
-    text = "📋 Все записи:\n\n"
-    for name, phone, procedure, date, time in rows:
-        text += f"{name} ({phone}) — {procedure} — {date} {time}\n"
-
-    await message.answer(text)
-    return
-
 # ====== КЛАВИАТУРЫ ======
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
@@ -144,6 +86,7 @@ def get_dates_keyboard():
     kb.append([KeyboardButton(text="Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+# 🔥 ТЕПЕРЬ ВРЕМЯ ТОЛЬКО ИЗ ГРАФИКА
 def get_time_keyboard(date):
     kb = []
     now = datetime.now()
@@ -159,7 +102,7 @@ def get_time_keyboard(date):
         )
 
     times = [r[0] for r in rows]
-    available = []
+    buttons = []
 
     for t in times:
         hour = int(t.split(":")[0])
@@ -173,10 +116,10 @@ def get_time_keyboard(date):
         if date in appointments and t in appointments[date]:
             continue
 
-        available.append(KeyboardButton(text=t))
+        buttons.append(KeyboardButton(text=t))
 
     row = []
-    for i, btn in enumerate(available, 1):
+    for i, btn in enumerate(buttons, 1):
         row.append(btn)
         if i % 3 == 0:
             kb.append(row)
@@ -187,6 +130,7 @@ def get_time_keyboard(date):
     kb.append([KeyboardButton(text="Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+# ====== АДМИН ГРАФИК ======
 def get_week_keyboard():
     kb = []
     today = datetime.now()
@@ -218,6 +162,42 @@ def get_hours_keyboard(selected):
     kb.append([KeyboardButton(text="Назад")])
 
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+# ====== КОМАНДЫ ======
+@dp.message(lambda m: m.text == "/start")
+async def start_cmd(message: types.Message):
+    user_data.pop(message.from_user.id, None)
+    await message.answer("Привет 💅", reply_markup=main_kb)
+
+@dp.message(lambda m: m.text == "/week")
+async def week_cmd(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    user_data[message.from_user.id] = {"admin_week": True}
+    await message.answer("Выбери день", reply_markup=get_week_keyboard())
+
+@dp.message(lambda m: m.text == "/graph")
+async def graph_cmd(message: types.Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    cursor.execute("SELECT date, time FROM work_schedule ORDER BY date, time")
+    rows = cursor.fetchall()
+
+    if not rows:
+        await message.answer("График пуст")
+        return
+
+    result = {}
+    for d, t in rows:
+        result.setdefault(d, []).append(t)
+
+    text = "📅 График:\n\n"
+    for d in result:
+        text += f"{d}: {', '.join(result[d])}\n"
+
+    await message.answer(text)
 
 # ====== ОСНОВНОЙ ХЕНДЛЕР ======
 @dp.message()
@@ -267,7 +247,7 @@ async def handler(message: types.Message):
 
         return await message.answer("Обновлено", reply_markup=get_hours_keyboard(times))
 
-    # ===== ДАЛЬШЕ ВСЕ ТВОЕ БЕЗ ИЗМЕНЕНИЙ =====
+    # ===== ВСЕ ОСТАЛЬНОЕ (ТВОЕ) =====
     if text == "Заказать звонок":
         user_data[user_id] = {"callback": True}
         return await message.answer("Как тебя зовут?", reply_markup=back_kb)
