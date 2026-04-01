@@ -246,10 +246,6 @@ async def handler(message: types.Message):
 
     # ===== ГРАФИК =====
 
-        if not rows:
-            await message.answer("График пуст")
-            return
-
         result = {}
         for d, t in rows:
             result.setdefault(d, []).append(t)
