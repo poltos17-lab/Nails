@@ -14,6 +14,7 @@ dp = Dispatcher()
 user_data = {}
 appointments = {}
 user_appointments = {}
+work_schedule = {}  # НОВОЕ: график работы
 
 # ====== БАЗА ======
 conn = sqlite3.connect("appointments.db")
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS appointments (
 """)
 
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS work_schedule (
+CREATE TABLE IF NOT EXISTS schedule (
     date TEXT,
     time TEXT
 )
@@ -40,86 +41,83 @@ CREATE TABLE IF NOT EXISTS work_schedule (
 
 conn.commit()
 
+
 def load_data():
+    # записи
     cursor.execute("SELECT user_id, name, phone, procedure, date, time FROM appointments")
-    rows = cursor.fetchall()
-
-    for user_id, name, phone, procedure, date, time in rows:
+    for user_id, name, phone, procedure, date, time in cursor.fetchall():
         user_appointments[user_id] = (date, time, name, phone, procedure)
+        appointments.setdefault(date, []).append(time)
 
-        if date not in appointments:
-            appointments[date] = []
+    # график
+    cursor.execute("SELECT date, time FROM schedule")
+    for date, time in cursor.fetchall():
+        work_schedule.setdefault(date, []).append(time)
 
-        appointments[date].append(time)
 
-# ====== КЛАВИАТУРЫ ======
-main_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Записаться")],
-        [KeyboardButton(text="Заказать звонок")],
-        [KeyboardButton(text="Моя запись"), KeyboardButton(text="Отменить запись")]
-    ],
-    resize_keyboard=True
-)
+# ====== КНОПКИ ======
+def main_menu():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="Записаться")],
+            [KeyboardButton(text="Заказать звонок")],
+            [KeyboardButton(text="Моя запись"), KeyboardButton(text="Отменить запись")]
+        ],
+        resize_keyboard=True
+    )
 
-back_kb = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Назад")]],
-    resize_keyboard=True
-)
 
-procedure_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Маникюр"), KeyboardButton(text="Брови")],
-        [KeyboardButton(text="Назад")]
-    ],
-    resize_keyboard=True
-)
+def back_menu():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="Назад")],
+            [KeyboardButton(text="Главное меню")]
+        ],
+        resize_keyboard=True
+    )
 
+
+def procedure_kb():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="Маникюр"), KeyboardButton(text="Брови")],
+            [KeyboardButton(text="Назад")],
+            [KeyboardButton(text="Главное меню")]
+        ],
+        resize_keyboard=True
+    )
+
+
+# ====== ДАТЫ ======
 def get_dates_keyboard():
     kb = []
     today = datetime.now()
 
     for i in range(7):
         day = today + timedelta(days=i)
-        kb.append([KeyboardButton(text=day.strftime("%d.%m"))])
+        date_str = day.strftime("%d.%m")
+
+        # показываем только если есть рабочие часы
+        if date_str in work_schedule and work_schedule[date_str]:
+            kb.append([KeyboardButton(text=date_str)])
 
     kb.append([KeyboardButton(text="Назад")])
+    kb.append([KeyboardButton(text="Главное меню")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-# 🔥 ТЕПЕРЬ ВРЕМЯ ТОЛЬКО ИЗ ГРАФИКА
+
+# ====== ВРЕМЯ ДЛЯ КЛИЕНТА ======
 def get_time_keyboard(date):
     kb = []
-    now = datetime.now()
+    times = []
 
-    cursor.execute("SELECT time FROM work_schedule WHERE date=?", (date,))
-    rows = cursor.fetchall()
-
-    if not rows:
-        return ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="Нет доступного времени")],
-                      [KeyboardButton(text="Назад")]],
-            resize_keyboard=True
-        )
-
-    times = [r[0] for r in rows]
-    buttons = []
-
-    for t in times:
-        hour = int(t.split(":")[0])
-
-        selected = datetime.strptime(date, "%d.%m")
-        selected = selected.replace(year=now.year, hour=hour)
-
-        if selected < now:
+    for time in sorted(work_schedule.get(date, [])):
+        if date in appointments and time in appointments[date]:
             continue
-
-        if date in appointments and t in appointments[date]:
-            continue
-
-        buttons.append(KeyboardButton(text=t))
+        times.append(KeyboardButton(text=time))
 
     row = []
-    for i, btn in enumerate(buttons, 1):
+    for i, btn in enumerate(times, 1):
         row.append(btn)
         if i % 3 == 0:
             kb.append(row)
@@ -128,164 +126,248 @@ def get_time_keyboard(date):
         kb.append(row)
 
     kb.append([KeyboardButton(text="Назад")])
+    kb.append([KeyboardButton(text="Главное меню")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-# ====== АДМИН ГРАФИК ======
-def get_week_keyboard():
+
+# ====== АДМИН ДАТЫ ======
+def get_admin_dates():
     kb = []
     today = datetime.now()
 
     for i in range(7):
-        d = today + timedelta(days=i)
-        kb.append([KeyboardButton(text=d.strftime("%d.%m"))])
+        day = today + timedelta(days=i)
+        kb.append([KeyboardButton(text=day.strftime("%d.%m"))])
 
     kb.append([KeyboardButton(text="Назад")])
+    kb.append([KeyboardButton(text="Главное меню")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_hours_keyboard(selected):
+
+# ====== АДМИН ВРЕМЯ ======
+def get_admin_time_kb(date):
     kb = []
-    row = []
+    selected = work_schedule.get(date, [])
 
-    for i in range(10, 20):
-        t = f"{i}:00"
-        label = f"✅ {t}" if t in selected else f"❌ {t}"
-        row.append(KeyboardButton(text=label))
+    for hour in range(10, 20):
+        time_str = f"{hour}:00"
 
-        if len(row) == 3:
-            kb.append(row)
-            row = []
+        if time_str in selected:
+            text = f"✅ {time_str}"
+        else:
+            text = f"❌ {time_str}"
 
-    if row:
-        kb.append(row)
+        kb.append([KeyboardButton(text=text)])
 
     kb.append([KeyboardButton(text="Сохранить изменения")])
     kb.append([KeyboardButton(text="Назад")])
+    kb.append([KeyboardButton(text="Главное меню")])
 
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-# ====== КОМАНДЫ ======
-@dp.message(lambda m: m.text == "/start")
-async def start_cmd(message: types.Message):
-    user_data.pop(message.from_user.id, None)
-    await message.answer("Привет 💅", reply_markup=main_kb)
 
-@dp.message(lambda m: m.text == "/week")
-async def week_cmd(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        return
+# ====== НАПОМИНАНИЯ ======
+async def reminder_loop():
+    while True:
+        now = datetime.now()
 
-    user_data[message.from_user.id] = {"admin_week": True}
-    await message.answer("Выбери день", reply_markup=get_week_keyboard())
+        cursor.execute("SELECT user_id, procedure, date, time, reminded FROM appointments")
+        for user_id, procedure, date, time, reminded in cursor.fetchall():
 
-@dp.message(lambda m: m.text == "/graph")
-async def graph_cmd(message: types.Message):
-    if message.from_user.id not in ADMIN_IDS:
-        return
+            if reminded:
+                continue
 
-    cursor.execute("SELECT date, time FROM work_schedule ORDER BY date, time")
-    rows = cursor.fetchall()
+            appointment_time = datetime.strptime(date, "%d.%m").replace(
+                year=now.year, hour=int(time.split(":")[0])
+            )
 
-    if not rows:
-        await message.answer("График пуст")
-        return
+            diff = appointment_time - now
 
-    result = {}
-    for d, t in rows:
-        result.setdefault(d, []).append(t)
+            if timedelta(hours=23, minutes=50) < diff < timedelta(hours=24, minutes=10):
+                try:
+                    await bot.send_message(
+                        user_id,
+                        f"⏰ Напоминание!\nЗавтра у тебя {procedure} в {time}"
+                    )
 
-    text = "📅 График:\n\n"
-    for d in result:
-        text += f"{d}: {', '.join(result[d])}\n"
+                    cursor.execute(
+                        "UPDATE appointments SET reminded = 1 WHERE user_id = ?",
+                        (user_id,)
+                    )
+                    conn.commit()
+                except:
+                    pass
 
-    await message.answer(text)
+        await asyncio.sleep(60)
 
-# ====== ОСНОВНОЙ ХЕНДЛЕР ======
+
+# ====== ХЕНДЛЕР ======
 @dp.message()
 async def handler(message: types.Message):
     user_id = message.from_user.id
     text = message.text
 
+    # ===== ГЛАВНОЕ МЕНЮ =====
+    if text == "Главное меню":
+        user_data.pop(user_id, None)
+        await message.answer("Главное меню", reply_markup=main_menu())
+        return
+
+    # ===== START =====
+    if text == "/start":
+        await message.answer("Привет 💅", reply_markup=main_menu())
+
     # ===== АДМИН ГРАФИК =====
-    if user_id in user_data and user_data[user_id].get("admin_week"):
+    elif text == "/week" and user_id in ADMIN_IDS:
+        user_data[user_id] = {"admin": True}
+        await message.answer("Выбери день", reply_markup=get_admin_dates())
+
+    elif text == "/graph" and user_id in ADMIN_IDS:
+        if not work_schedule:
+            await message.answer("График пуст")
+            return
+
+        txt = "📅 График:\n\n"
+        for d, times in work_schedule.items():
+            txt += f"{d}: {', '.join(times)}\n"
+
+        await message.answer(txt)
+
+    elif user_id in user_data and user_data[user_id].get("admin"):
+        step = user_data[user_id]
+
+        if "date" not in step:
+            step["date"] = text
+            step["temp_times"] = work_schedule.get(text, []).copy()
+            await message.answer("Выбери время", reply_markup=get_admin_time_kb(text))
+            return
 
         if text == "Назад":
-            del user_data[user_id]
-            return await message.answer("Главное меню", reply_markup=main_kb)
-
-        if "date" not in user_data[user_id]:
-            user_data[user_id]["date"] = text
-
-            cursor.execute("SELECT time FROM work_schedule WHERE date=?", (text,))
-            rows = cursor.fetchall()
-
-            user_data[user_id]["times"] = [r[0] for r in rows]
-
-            return await message.answer("Выбери часы",
-                reply_markup=get_hours_keyboard(user_data[user_id]["times"])
-            )
+            if "date" in step:
+                step.pop("date")
+                await message.answer("Выбери день", reply_markup=get_admin_dates())
+            return
 
         if text == "Сохранить изменения":
-            date = user_data[user_id]["date"]
+            date = step["date"]
 
-            cursor.execute("DELETE FROM work_schedule WHERE date=?", (date,))
-            for t in user_data[user_id]["times"]:
-                cursor.execute("INSERT INTO work_schedule VALUES (?, ?)", (date, t))
+            work_schedule[date] = step["temp_times"]
+
+            cursor.execute("DELETE FROM schedule WHERE date = ?", (date,))
+            for t in step["temp_times"]:
+                cursor.execute("INSERT INTO schedule VALUES (?, ?)", (date, t))
             conn.commit()
 
-            del user_data[user_id]["date"]
-            del user_data[user_id]["times"]
+            step.pop("date")
+            await message.answer("Сохранено ✅", reply_markup=get_admin_dates())
+            return
 
-            return await message.answer("Сохранено", reply_markup=get_week_keyboard())
+        # переключение времени
+        time = text.replace("✅ ", "").replace("❌ ", "")
 
-        t = text.replace("✅ ", "").replace("❌ ", "")
-        times = user_data[user_id]["times"]
-
-        if t in times:
-            times.remove(t)
+        if time in step["temp_times"]:
+            step["temp_times"].remove(time)
         else:
-            times.append(t)
+            step["temp_times"].append(time)
 
-        return await message.answer("Обновлено", reply_markup=get_hours_keyboard(times))
+        await message.answer("Обновлено", reply_markup=get_admin_time_kb(step["date"]))
+        return
 
-    # ===== ВСЕ ОСТАЛЬНОЕ (ТВОЕ) =====
-    if text == "Заказать звонок":
-        user_data[user_id] = {"callback": True}
-        return await message.answer("Как тебя зовут?", reply_markup=back_kb)
-
-    elif user_id in user_data and user_data[user_id].get("callback") and "name" not in user_data[user_id]:
-        user_data[user_id]["name"] = text
-        return await message.answer("Введи номер телефона 📱", reply_markup=back_kb)
-
-    elif user_id in user_data and user_data[user_id].get("callback") and "phone" not in user_data[user_id]:
-        name = user_data[user_id]["name"]
-        phone = text
-
-        for admin in ADMIN_IDS:
-            await bot.send_message(admin, f"📞 Заявка на звонок!\n\nИмя: {name}\nТелефон: {phone}")
-
-        del user_data[user_id]
-        return await message.answer("Спасибо! Мы скоро свяжемся 💛", reply_markup=main_kb)
+    # ===== ДАЛЕЕ ЛОГИКА КОДА 1 (без изменений, но с новым графиком) =====
 
     elif text == "Записаться":
-
         if user_id in user_appointments:
-            return await message.answer("У тебя уже есть запись 🙃")
+            await message.answer("У тебя уже есть запись 🙃")
+            return
 
         user_data[user_id] = {}
-        return await message.answer("Выбери процедуру ✨", reply_markup=procedure_kb)
+        await message.answer("Выбери процедуру ✨", reply_markup=procedure_kb())
 
     elif text == "Назад" and user_id in user_data:
-        user_data.pop(user_id, None)
-        return await message.answer("Главное меню", reply_markup=main_kb)
+        user_data.pop(user_id)
+        await message.answer("Главное меню", reply_markup=main_menu())
+
+    elif user_id in user_data and "procedure" not in user_data[user_id]:
+        user_data[user_id]["procedure"] = text
+        await message.answer("Как тебя зовут?", reply_markup=back_menu())
+
+    elif user_id in user_data and "name" not in user_data[user_id]:
+        user_data[user_id]["name"] = text
+        await message.answer("Введи номер телефона 📱", reply_markup=back_menu())
+
+    elif user_id in user_data and "phone" not in user_data[user_id]:
+        user_data[user_id]["phone"] = text
+        await message.answer("Выбери дату 📅", reply_markup=get_dates_keyboard())
+
+    elif user_id in user_data and "date" not in user_data[user_id]:
+        user_data[user_id]["date"] = text
+        await message.answer("Выбери время ⏰", reply_markup=get_time_keyboard(text))
+
+    elif user_id in user_data and "time" not in user_data[user_id]:
+        date = user_data[user_id]["date"]
+        time = text
+
+        if date not in work_schedule or time not in work_schedule[date]:
+            await message.answer("❌ Недоступно")
+            return
+
+        if date in appointments and time in appointments[date]:
+            await message.answer("❌ Уже занято")
+            return
+
+        name = user_data[user_id]["name"]
+        phone = user_data[user_id]["phone"]
+        procedure = user_data[user_id]["procedure"]
+
+        appointments.setdefault(date, []).append(time)
+        user_appointments[user_id] = (date, time, name, phone, procedure)
+
+        cursor.execute(
+            "INSERT INTO appointments VALUES (?, ?, ?, ?, ?, ?, 0)",
+            (user_id, name, phone, procedure, date, time)
+        )
+        conn.commit()
+
+        await message.answer(
+            f"Готово 💅\n{name}, ты записана на {procedure}\n📅 {date} {time}",
+            reply_markup=main_menu()
+        )
+
+        user_data.pop(user_id)
+
+    elif text == "Моя запись":
+        if user_id in user_appointments:
+            d, t, n, p, pr = user_appointments[user_id]
+            await message.answer(f"{pr}\n📅 {d} {t}")
+        else:
+            await message.answer("Нет записи")
+
+    elif text == "Отменить запись":
+        if user_id in user_appointments:
+            d, t, *_ = user_appointments[user_id]
+
+            if d in appointments and t in appointments[d]:
+                appointments[d].remove(t)
+
+            del user_appointments[user_id]
+
+            cursor.execute("DELETE FROM appointments WHERE user_id = ?", (user_id,))
+            conn.commit()
+
+            await message.answer("Запись отменена", reply_markup=main_menu())
+        else:
+            await message.answer("Нет записи")
 
     else:
-        await message.answer("Выбери действие", reply_markup=main_kb)
+        await message.answer("Выбери действие", reply_markup=main_menu())
+
 
 # ===== ЗАПУСК =====
 async def main():
     load_data()
     asyncio.create_task(reminder_loop())
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
