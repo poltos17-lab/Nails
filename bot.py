@@ -78,7 +78,7 @@ def back_kb():
 def procedure_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Ресницы "), KeyboardButton(text="Брови 👁")],
+            [KeyboardButton(text="Ресницы 👁‍🗨"), KeyboardButton(text="Брови 👁")],
             [KeyboardButton(text="Назад")],
             [KeyboardButton(text="Главное меню")]
         ],
