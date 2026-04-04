@@ -101,15 +101,27 @@ def client_dates():
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
-# ===== ВРЕМЯ =====
+# ===== ВРЕМЯ (С ФИЛЬТРОМ ПРОШЕДШЕГО) =====
 def client_times(date):
     kb, row = [], []
+    now = datetime.now()
 
     for time in sorted(work_schedule.get(date, [])):
+        hour = int(time.split(":")[0])
+
+        selected_dt = datetime.strptime(date, "%d.%m").replace(
+            year=now.year, hour=hour
+        )
+
+        # ❗ фильтр прошедшего времени
+        if selected_dt < now:
+            continue
+
         if date in appointments and time in appointments[date]:
             continue
 
         row.append(KeyboardButton(text=time))
+
         if len(row) == 3:
             kb.append(row)
             row = []
@@ -169,7 +181,7 @@ async def reminder_loop():
                 try:
                     await bot.send_message(
                         user_id,
-                        f"⏰ Напоминание!\nЗавтра у тебя процедура *{procedure}* в {time} 💖"
+                        f"⏰ Напоминание!\nЗавтра у тебя {procedure} в {time} 💖"
                     )
                     cursor.execute("UPDATE appointments SET reminded=1 WHERE user_id=?", (user_id,))
                     conn.commit()
@@ -185,27 +197,26 @@ async def handler(message: types.Message):
     user_id = message.from_user.id
     text = message.text
 
-    # ===== ГЛАВНОЕ МЕНЮ =====
+    # ГЛАВНОЕ МЕНЮ
     if text == "Главное меню":
         user_data.pop(user_id, None)
-        await message.answer("🏠 Ты в главном меню", reply_markup=main_kb())
+        await message.answer("🏠 Главное меню", reply_markup=main_kb())
         return
 
-    # ===== START =====
     if text == "/start":
-        await message.answer("Привет! 💅 Я помогу тебе записаться на процедуру ✨", reply_markup=main_kb())
+        await message.answer("Привет! 💅 Запишу тебя быстро и удобно ✨", reply_markup=main_kb())
 
     # ===== АДМИН =====
     elif text == "/week" and user_id in ADMIN_IDS:
         user_data[user_id] = {"admin": True}
-        await message.answer("📅 Выбери день для настройки графика", reply_markup=admin_dates())
+        await message.answer("📅 Выбери день", reply_markup=admin_dates())
 
     elif text == "/graph" and user_id in ADMIN_IDS:
         if not work_schedule:
-            await message.answer("Пока график пуст 😔")
+            await message.answer("График пока пуст 😔")
             return
 
-        txt = "📅 Твой график:\n\n"
+        txt = "📅 График:\n\n"
         for d, t in work_schedule.items():
             txt += f"{d}: {', '.join(sorted(t))}\n"
 
@@ -219,7 +230,7 @@ async def handler(message: types.Message):
             await message.answer("Записей пока нет 😌")
             return
 
-        txt = "📋 Записи клиентов:\n\n"
+        txt = "📋 Записи:\n\n"
         for n, p, pr, d, t in rows:
             txt += f"{n} ({p}) — {pr} — {d} {t}\n"
 
@@ -241,7 +252,7 @@ async def handler(message: types.Message):
         if "date" not in step:
             step["date"] = text
             step["temp"] = work_schedule.get(text, []).copy()
-            await message.answer("⏰ Настрой рабочие часы", reply_markup=admin_times(text, step["temp"]))
+            await message.answer("⏰ Настрой время", reply_markup=admin_times(text, step["temp"]))
             return
 
         if text == "Сохранить изменения":
@@ -276,12 +287,12 @@ async def handler(message: types.Message):
 
         if "name" not in step:
             step["name"] = text
-            await message.answer("Оставь номер телефона 📱", reply_markup=back_kb())
+            await message.answer("Оставь номер 📱", reply_markup=back_kb())
         else:
             for admin in ADMIN_IDS:
-                await bot.send_message(admin, f"📞 Заявка на звонок!\nИмя: {step['name']}\nТелефон: {text}")
+                await bot.send_message(admin, f"📞 Заявка!\n{step['name']} {text}")
 
-            await message.answer("Спасибо! Мы скоро свяжемся с тобой 💛", reply_markup=main_kb())
+            await message.answer("Спасибо! Скоро свяжемся 💛", reply_markup=main_kb())
             user_data.pop(user_id)
 
     # ===== ЗАПИСЬ =====
@@ -291,7 +302,7 @@ async def handler(message: types.Message):
             return
 
         user_data[user_id] = {}
-        await message.answer("Выбери процедуру ✨", reply_markup=procedure_kb())
+        await message.answer("Выбери услугу ✨", reply_markup=procedure_kb())
 
     elif text == "Назад" and user_id in user_data:
         user_data.pop(user_id)
@@ -306,11 +317,11 @@ async def handler(message: types.Message):
 
         elif "name" not in step:
             step["name"] = text
-            await message.answer("Введи номер телефона 📱", reply_markup=back_kb())
+            await message.answer("Введи номер 📱", reply_markup=back_kb())
 
         elif "phone" not in step:
             step["phone"] = text
-            await message.answer("Выбери удобную дату 📅", reply_markup=client_dates())
+            await message.answer("Выбери дату 📅", reply_markup=client_dates())
 
         elif "date" not in step:
             step["date"] = text
@@ -324,7 +335,7 @@ async def handler(message: types.Message):
                 return
 
             if d in appointments and t in appointments[d]:
-                await message.answer("Это время уже занято 😢")
+                await message.answer("Уже занято 😢")
                 return
 
             appointments.setdefault(d, []).append(t)
@@ -351,9 +362,9 @@ async def handler(message: types.Message):
     elif text == "Моя запись 📅":
         if user_id in user_appointments:
             d, t, n, p, pr = user_appointments[user_id]
-            await message.answer(f"✨ {pr}\n📅 {d} в {t}\n📱 {p}")
+            await message.answer(f"{pr}\n📅 {d} {t}\n📱 {p}")
         else:
-            await message.answer("У тебя пока нет записи 😔")
+            await message.answer("Записи нет 😔")
 
     # ===== ОТМЕНА =====
     elif text == "Отменить запись ❌":
@@ -367,14 +378,14 @@ async def handler(message: types.Message):
             conn.commit()
 
             for admin in ADMIN_IDS:
-                await bot.send_message(admin, f"❌ Отмена записи\n{n} {d} {t}")
+                await bot.send_message(admin, f"❌ Отмена\n{n} {d} {t}")
 
             await message.answer("Запись отменена ❌", reply_markup=main_kb())
         else:
             await message.answer("У тебя нет записи 😌")
 
     else:
-        await message.answer("Выбери действие ниже 👇", reply_markup=main_kb())
+        await message.answer("Выбери действие 👇", reply_markup=main_kb())
 
 
 # ===== ЗАПУСК =====
